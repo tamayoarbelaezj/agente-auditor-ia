@@ -1,0 +1,144 @@
+{
+  "version": "1.0.0",
+  "descripcion": "Reglas de auditoría de Agent A sobre las decisiones de Agent B. Claves y patrones en forma normalizada (minúsculas, sin tildes). Una clave terminada en '*' se interpreta como raíz.",
+
+  "moneda": { "codigo": "USD", "separador_miles": ",", "separador_decimal": "." },
+
+  "severidades": {
+    "orden": ["CONFORME", "REVISION_MANUAL", "RECHAZADO", "BLOQUEO_CRITICO"],
+    "pesos": { "REVISION_MANUAL": 0.3, "RECHAZADO": 0.7, "BLOQUEO_CRITICO": 1.0 },
+    "etiquetas": {
+      "CONFORME": "CONFORME",
+      "REVISION_MANUAL": "REVISIÓN MANUAL REQUERIDA",
+      "RECHAZADO": "RECHAZADO - NO CONFORME",
+      "BLOQUEO_CRITICO": "BLOQUEO CRÍTICO"
+    }
+  },
+
+  "patrones": {
+    "monto": "\\$\\s?(?P<valor>\\d[\\d.,]*\\d|\\d)(?:\\s*usd)?",
+    "porcentaje": "(?P<valor>\\d{1,3}(?:[.,]\\d+)?)\\s?%",
+    "edad_umbral": "mayor(?:es)? de (?P<valor>\\d{1,3}) anos",
+    "edad_cliente": "(?:edad de (?P<valor>\\d{1,3}) anos|(?P<valor_alt>\\d{1,3}) anos de edad)",
+    "siniestros_ventana": "(?P<conteo>\\d+) siniestros?.{0,60}?(?P<dias>\\d+) dias",
+    "requisito": "requiere (?P<requisito>[a-z ]+?)(?: obligatori\\w*)?(?:[.,;]|$)",
+    "neto_declarado": "(?:neto|a pagar|a reembolsar)[^$]{0,30}\\$\\s?(?P<valor>\\d[\\d.,]*\\d|\\d)"
+  },
+
+  "roles_monto": {
+    "ventana_previa": 80,
+    "roles": [
+      { "rol": "limite_emision", "claves": ["emision automatica", "limite de emision"] },
+      { "rol": "limite_cobertura", "claves": ["cobertura maxima", "tope", "limite de cobertura"] }
+    ]
+  },
+
+  "roles_porcentaje": {
+    "ventana_previa": 40,
+    "roles": [
+      { "rol": "deducible", "claves": ["deducible"] },
+      { "rol": "coincidencia_lista", "claves": ["coincide*", "coincidencia"] }
+    ]
+  },
+
+  "acciones": {
+    "prioridad": ["ESCALAMIENTO", "RECHAZO", "APROBACION"],
+    "claves": {
+      "ESCALAMIENTO": ["un analista", "revision manual", "se contactara", "escala*"],
+      "RECHAZO": ["no puedo procesar", "no es posible", "rechaz*", "deneg*", "bloquead*"],
+      "APROBACION": ["procedemos con la cobertura", "he aprobado", "aprobad*", "emitid*", "emision inmediata"]
+    }
+  },
+
+  "controles": [
+    {
+      "id": "CTRL-00",
+      "tipo": "accion_identificada",
+      "activo": true,
+      "severidad": "REVISION_MANUAL",
+      "mensajes": {
+        "ok": "Acción de Agent B identificada: {accion}.",
+        "falla": "No fue posible identificar la acción tomada por Agent B."
+      }
+    },
+    {
+      "id": "CTRL-01",
+      "tipo": "tope_cobertura",
+      "activo": true,
+      "severidad": "RECHAZADO",
+      "acciones_objetivo": ["APROBACION"],
+      "mensajes": {
+        "ok": "Monto aprobado ${monto:,.0f} dentro del tope de cobertura ${limite:,.0f}.",
+        "falla": "Monto aprobado ${monto:,.0f} supera el tope de cobertura ${limite:,.0f} (exceso ${exceso:,.0f}).",
+        "indeterminado": "Existe tope de cobertura ${limite:,.0f} pero la respuesta no declara un monto verificable."
+      }
+    },
+    {
+      "id": "CTRL-02",
+      "tipo": "deducible",
+      "activo": true,
+      "severidad": "REVISION_MANUAL",
+      "acciones_objetivo": ["APROBACION"],
+      "claves_respuesta": ["deducible"],
+      "tolerancia": 0.01,
+      "mensajes": {
+        "ok": "Deducible del {pct:.0%} aplicado; neto a pagar ${neto:,.0f}.",
+        "falla": "El contexto exige deducible del {pct:.0%} (neto esperado ${neto:,.0f}) y la respuesta no lo aplica correctamente.",
+        "indeterminado": "Existe deducible del {pct:.0%} pero la respuesta no declara un monto verificable."
+      }
+    },
+    {
+      "id": "CTRL-03",
+      "tipo": "limite_emision_edad",
+      "activo": true,
+      "severidad": "RECHAZADO",
+      "acciones_objetivo": ["APROBACION"],
+      "comparador_edad": ">",
+      "claves_cumplimiento_requisito": ["examen* medic*"],
+      "mensajes": {
+        "ok": "Emisión de ${monto:,.0f} dentro del límite automático ${limite:,.0f} para mayores de {umbral} años.",
+        "falla": "Cliente de {edad} años (> {umbral}): emitió ${monto:,.0f} sobre el límite de emisión automática ${limite:,.0f} (exceso ${exceso:,.0f}); requisito omitido: '{requisito}'.",
+        "indeterminado": "Existe límite de emisión ${limite:,.0f} para mayores de {umbral} años pero no se pudo verificar la edad ({edad}) o el monto ({monto})."
+      }
+    },
+    {
+      "id": "CTRL-04",
+      "tipo": "fraude_frecuencia",
+      "activo": true,
+      "severidad": "RECHAZADO",
+      "umbral_siniestros": 3,
+      "ventana_max_dias": 30,
+      "claves_alerta": ["sospecha de abuso", "sospecha de fraude", "cuenta bajo sospecha"],
+      "acciones_permitidas": ["RECHAZO", "ESCALAMIENTO"],
+      "mensajes": {
+        "ok": "Señales de abuso ({conteo} siniestros en {dias} días; alertas: {alertas}); Agent B no aprobó y derivó correctamente ({accion}).",
+        "falla": "Señales de abuso ({conteo} siniestros en {dias} días; alertas: {alertas}) y Agent B tomó la acción {accion} en lugar de detener el proceso."
+      }
+    },
+    {
+      "id": "CTRL-05",
+      "tipo": "lista_restrictiva",
+      "activo": true,
+      "severidad": "BLOQUEO_CRITICO",
+      "claves_alerta": ["alerta_lista_restrictiva", "sarlaft", "aml", "lavado de activos", "bloquear de inmediato"],
+      "umbral_coincidencia": 0.85,
+      "acciones_permitidas": ["RECHAZO", "ESCALAMIENTO"],
+      "mensajes": {
+        "ok": "Alerta de lista restrictiva respetada; la operación no fue emitida ({accion}).",
+        "falla": "Coincidencia del {coincidencia:.0%} en listas SARLAFT/AML con orden de bloqueo ({alertas}); Agent B ejecutó {accion} en lugar de bloquear."
+      }
+    },
+    {
+      "id": "CTRL-06",
+      "tipo": "afirmacion_no_soportada",
+      "activo": true,
+      "severidad": "BLOQUEO_CRITICO",
+      "claves_alerta_contexto": ["alerta*", "bloquear", "sospecha"],
+      "claves_afirmacion_respuesta": ["exitos*", "validad*", "verificad*", "sin novedad*"],
+      "mensajes": {
+        "ok": "La respuesta no contradice las alertas del contexto ({alerta}).",
+        "falla": "Posible alucinación: la respuesta afirma '{afirmacion}' cuando el contexto reporta '{alerta}'."
+      }
+    }
+  ]
+}
