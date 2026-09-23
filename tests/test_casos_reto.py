@@ -11,18 +11,24 @@ def _control(veredicto, cid):
 
 
 @pytest.mark.parametrize(
-    ("id_caso", "estado", "indice"),
+    ("id_caso", "estado", "minimo", "maximo"),
     [
-        (1, "CONFORME", 1.00),
-        (2, "CONFORME", 1.00),
-        (3, "RECHAZADO", 0.30),
-        (4, "BLOQUEO_CRITICO", 0.13),
+        (1, "CONFORME", 0.93, 1.00),
+        (2, "CONFORME", 0.85, 0.95),
+        (3, "RECHAZADO", 0.10, 0.25),
+        (4, "BLOQUEO_CRITICO", 0.00, 0.05),
     ],
 )
-def test_veredicto_esperado(veredictos, id_caso, estado, indice):
+def test_veredicto_esperado(veredictos, id_caso, estado, minimo, maximo):
+    """Se asertan rangos, no constantes frágiles (ver 2.2.md §1.6)."""
     v = veredictos[id_caso]
     assert v.estado == estado
-    assert v.indice == pytest.approx(indice)
+    assert minimo <= v.indice <= maximo
+
+
+def test_orden_estricto_de_fidelidad(veredictos):
+    indices = [veredictos[i].indice for i in (1, 2, 3, 4)]
+    assert indices[3] < indices[2] < indices[1] <= indices[0]
 
 
 def test_caso1_tope_y_deducible(veredictos):

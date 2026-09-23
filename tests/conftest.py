@@ -11,6 +11,7 @@ from auditor.motor import Auditor
 RAIZ = Path(__file__).resolve().parents[1]
 RUTA_REGLAS = RAIZ / "reglas.json"
 RUTA_CASOS = RAIZ / "data" / "casos.json"
+RUTA_CALIBRACION = RAIZ / "data" / "casos_calibracion.json"
 
 
 @pytest.fixture(scope="session")
@@ -32,6 +33,11 @@ def reglas_mod(reglas_dict):
 @pytest.fixture(scope="session")
 def casos_dict():
     return json.loads(RUTA_CASOS.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="session")
+def casos_calibracion_dict():
+    return json.loads(RUTA_CALIBRACION.read_text(encoding="utf-8"))
 
 
 @pytest.fixture

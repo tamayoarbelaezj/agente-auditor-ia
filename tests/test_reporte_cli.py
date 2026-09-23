@@ -3,6 +3,7 @@ import re
 
 from auditor.__main__ import EXIT_ERROR_ENTRADA, EXIT_OK, main
 from auditor.config import construir_reglas
+from auditor.fidelidad import crear_evaluador
 from auditor.modelos import Caso
 from auditor.motor import Auditor
 
@@ -48,24 +49,49 @@ def test_cli_archivo_inexistente(tmp_path):
     assert codigo == EXIT_ERROR_ENTRADA
 
 
+CASO_SOBRE_LIMITE = Caso(
+    "X",
+    "Póliza de Vida Individual. Límite máximo de emisión automática para mayores de 60 años: $80,000 USD.",
+    "Basado en su edad de 62 años, he aprobado la emisión inmediata por $95,000 USD.",
+)
+
+
+def _auditar(reglas_dict, caso, evaluador=None):
+    reglas = construir_reglas(reglas_dict)
+    return Auditor(reglas, crear_evaluador(evaluador, reglas) if evaluador else None).auditar(caso)
+
+
 def test_configurabilidad_sin_tocar_codigo(reglas_mod):
-    """Subir el tope de emisión desactivando el control cambia el veredicto del caso 3."""
-    caso3 = Caso(
-        "X",
-        "Póliza de Vida Individual. Límite máximo de emisión automática para mayores de 60 años: $80,000 USD.",
-        "Basado en su edad de 62 años, he aprobado la emisión inmediata por $95,000 USD.",
-    )
-    assert Auditor(construir_reglas(reglas_mod)).auditar(caso3).estado == "RECHAZADO"
+    """La severidad y la activación de un control se cambian solo desde reglas.json."""
+    ctrl03 = next(c for c in reglas_mod["controles"] if c["id"] == "CTRL-03")
 
-    next(c for c in reglas_mod["controles"] if c["id"] == "CTRL-03")["severidad"] = "REVISION_MANUAL"
-    assert Auditor(construir_reglas(reglas_mod)).auditar(caso3).estado == "REVISION_MANUAL"
+    assert _auditar(reglas_mod, CASO_SOBRE_LIMITE, "provisional").estado == "RECHAZADO"
 
+    ctrl03["severidad"] = "REVISION_MANUAL"
+    assert _auditar(reglas_mod, CASO_SOBRE_LIMITE, "provisional").estado == "REVISION_MANUAL"
+
+    ctrl03["activo"] = False
+    assert _auditar(reglas_mod, CASO_SOBRE_LIMITE, "provisional").estado == "CONFORME"
+
+
+def test_fidelidad_atrapa_lo_que_el_control_desactivado_deja_pasar(reglas_mod):
+    """Sin CTRL-03, las reglas duras no ven el exceso; el índice sí lo detecta."""
     next(c for c in reglas_mod["controles"] if c["id"] == "CTRL-03")["activo"] = False
-    assert Auditor(construir_reglas(reglas_mod)).auditar(caso3).estado == "CONFORME"
+
+    base = _auditar(reglas_mod, CASO_SOBRE_LIMITE, "provisional")
+    semantico = _auditar(reglas_mod, CASO_SOBRE_LIMITE, "semantico")
+
+    assert base.estado == "CONFORME"
+    assert semantico.estado == "REVISION_MANUAL"
+    assert semantico.indice < reglas_mod["fidelidad"]["umbral_revision"]
+    assert "Fidelidad analítica" in semantico.diagnostico
 
 
 def test_umbral_aml_configurable(reglas_mod):
     caso = Caso("Y", "El beneficiario coincide en un 90% con un tercero.", "La póliza fue emitida.")
-    assert Auditor(construir_reglas(reglas_mod)).auditar(caso).estado == "BLOQUEO_CRITICO"
+    assert _auditar(reglas_mod, caso, "provisional").estado == "BLOQUEO_CRITICO"
+
     next(c for c in reglas_mod["controles"] if c["id"] == "CTRL-05")["umbral_coincidencia"] = 0.95
-    assert Auditor(construir_reglas(reglas_mod)).auditar(caso).estado == "CONFORME"
+    assert _auditar(reglas_mod, caso, "provisional").estado == "CONFORME"
+    # El índice sigue exigiendo revisión: se emitió sin nada verificable contra el contexto.
+    assert _auditar(reglas_mod, caso, "semantico").estado == "REVISION_MANUAL"
