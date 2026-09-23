@@ -45,8 +45,10 @@
     "prioridad": ["ESCALAMIENTO", "RECHAZO", "APROBACION"],
     "claves": {
       "ESCALAMIENTO": ["un analista", "revision manual", "se contactara", "escala*"],
-      "RECHAZO": ["no puedo procesar", "no es posible", "rechaz*", "deneg*", "bloquead*"],
-      "APROBACION": ["procedemos con la cobertura", "he aprobado", "aprobad*", "emitid*", "emision inmediata"]
+      "RECHAZO": ["no puedo procesar", "no es posible", "rechaz*", "deneg*", "bloquead*",
+                  "no proced*", "no cubr*", "no reconoc*", "no autoriz*", "no ampar*", "no reembolsa*"],
+      "APROBACION": ["procedemos con", "he aprobado", "aprobad*", "emitid*", "emision inmediata",
+                     "reconocemos", "autorizamos", "cubrimos", "reembolsa*"]
     }
   },
 
@@ -79,7 +81,7 @@
       "activo": true,
       "severidad": "REVISION_MANUAL",
       "acciones_objetivo": ["APROBACION"],
-      "claves_respuesta": ["deducible"],
+      "claves_respuesta": ["deducible", "descuento*", "descontando"],
       "tolerancia": 0.01,
       "mensajes": {
         "ok": "Deducible del {pct:.0%} aplicado; neto a pagar ${neto:,.0f}.",

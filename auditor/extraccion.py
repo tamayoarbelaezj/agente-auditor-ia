@@ -11,6 +11,7 @@ from .modelos import Extraccion
 log = logging.getLogger(__name__)
 
 ROL_RESPUESTA = "monto_respuesta"
+ROL_PORCENTAJE_RESPUESTA = "porcentaje_respuesta"
 ROL_SIN_ASIGNAR = "sin_rol"
 
 
@@ -66,7 +67,7 @@ class Extractor:
             rol = _asignar_rol(texto, m.start(), self.reglas.roles_monto) if con_roles else ROL_RESPUESTA
             ext.montos.setdefault(rol, []).append(valor)
 
-    def _porcentajes(self, texto: str, ext: Extraccion) -> None:
+    def _porcentajes(self, texto: str, ext: Extraccion, con_roles: bool) -> None:
         for m in self.p["porcentaje"].finditer(texto):
             valor = self._numero(m.group("valor"), ext, "el porcentaje")
             if valor is None:
@@ -74,7 +75,11 @@ class Extractor:
             if not 0 <= valor <= 100:
                 ext.advertencias.append(f"Porcentaje fuera de rango: {valor}")
                 continue
-            rol = _asignar_rol(texto, m.start(), self.reglas.roles_porcentaje)
+            rol = (
+                _asignar_rol(texto, m.start(), self.reglas.roles_porcentaje)
+                if con_roles
+                else ROL_PORCENTAJE_RESPUESTA
+            )
             ext.porcentajes.setdefault(rol, []).append(valor / 100)
 
     def _entero(self, nombre: str, texto: str) -> int | None:
@@ -88,7 +93,8 @@ class Extractor:
         ext = Extraccion()
         self._montos(contexto_n, ext, con_roles=True)
         self._montos(respuesta_n, ext, con_roles=False)
-        self._porcentajes(contexto_n, ext)
+        self._porcentajes(contexto_n, ext, con_roles=True)
+        self._porcentajes(respuesta_n, ext, con_roles=False)
 
         ext.edad_umbral = self._entero("edad_umbral", contexto_n)
         ext.edad_cliente = self._entero("edad_cliente", respuesta_n)
