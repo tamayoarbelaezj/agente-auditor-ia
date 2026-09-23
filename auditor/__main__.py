@@ -35,12 +35,30 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--reglas", default="reglas.json", help="archivo de configuración de controles")
     p.add_argument("--salida", default="salida/reporte.txt", help="reporte de texto (formato del reto)")
     p.add_argument("--json", default="salida/reporte.json", help="reporte JSON de trazabilidad")
-    p.add_argument("--evaluador", default="provisional", choices=sorted(EVALUADORES),
-                   help="algoritmo del Índice de Fidelidad Analítica")
+    p.add_argument("--evaluador", default=None, choices=sorted(EVALUADORES),
+                   help="algoritmo del Índice de Fidelidad Analítica (por defecto, el de reglas.json)")
+    p.add_argument("--comparar", action="store_true",
+                   help="imprime el índice de todos los evaluadores lado a lado")
     p.add_argument("--log-level", default="WARNING",
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
+
+
+def comparar_evaluadores(reglas, casos, destacado: str) -> str:
+    """Tabla de índices por evaluador: evidencia de qué aporta el semántico."""
+    columnas = sorted(EVALUADORES)
+    filas = {
+        nombre: {v.id_caso: v for v in Auditor(reglas, crear_evaluador(nombre, reglas)).auditar_lote(casos)}
+        for nombre in columnas
+    }
+    ancho = max(len(c) for c in columnas) + 2
+    encabezado = "Caso".ljust(8) + "".join(c.ljust(ancho) for c in columnas) + "Estado"
+    lineas = ["", "Comparación de evaluadores (activo: " + destacado + ")", encabezado, "-" * len(encabezado)]
+    for id_caso in filas[destacado]:
+        indices = "".join(f"{filas[c][id_caso].indice:.2f}".ljust(ancho) for c in columnas)
+        lineas.append(str(id_caso).ljust(8) + indices + filas[destacado][id_caso].etiqueta)
+    return "\n".join(lineas) + "\n"
 
 
 def _configurar_consola() -> None:
@@ -62,11 +80,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         log.error("%s", exc)
         return EXIT_ERROR_ENTRADA
 
-    auditor = Auditor(reglas, crear_evaluador(args.evaluador, reglas))
+    evaluador = args.evaluador or reglas.fidelidad.evaluador_por_defecto
+    auditor = Auditor(reglas, crear_evaluador(evaluador, reglas))
     veredictos = auditor.auditar_lote(casos)
 
     texto = formatear_reporte(veredictos)
     print(texto, end="")
+    if args.comparar:
+        print(comparar_evaluadores(reglas, casos, evaluador))
     try:
         escribir(args.salida, texto)
         escribir_json(

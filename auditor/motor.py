@@ -3,13 +3,27 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 
 from .acciones import clasificar_accion
 from .config import ESTADO_CONFORME, ESTADO_REVISION, Reglas
 from .controles import REGISTRO, ContextoControl
 from .extraccion import Extractor
-from .fidelidad import EvaluadorFidelidad, EvaluadorProvisional
-from .modelos import Caso, CasoInvalido, EstadoControl, ResultadoControl, Veredicto
+from .fidelidad import (
+    COBERTURA_INSUFICIENTE,
+    EvaluadorFidelidad,
+    PuntajeFidelidad,
+    crear_evaluador,
+)
+from .modelos import (
+    Accion,
+    Caso,
+    CasoInvalido,
+    EntradaFidelidad,
+    EstadoControl,
+    ResultadoControl,
+    Veredicto,
+)
 from .normalizacion import normalizar
 
 log = logging.getLogger(__name__)
@@ -20,7 +34,9 @@ class Auditor:
 
     def __init__(self, reglas: Reglas, evaluador: EvaluadorFidelidad | None = None) -> None:
         self.reglas = reglas
-        self.evaluador = evaluador or EvaluadorProvisional(reglas)
+        self.evaluador = evaluador or crear_evaluador(
+            reglas.fidelidad.evaluador_por_defecto, reglas
+        )
         self.extractor = Extractor(reglas)
 
     # ------------------------------------------------------------ resolución
@@ -57,6 +73,37 @@ class Auditor:
                 mensaje=f"Error interno del control: {type(exc).__name__}: {exc}",
             )
 
+    def _puntuar(self, entrada: EntradaFidelidad) -> PuntajeFidelidad:
+        try:
+            return self.evaluador.puntuar(entrada)
+        except Exception as exc:  # fail-safe: sin índice confiable, decide un humano
+            log.exception("Error evaluando la fidelidad del caso %s", entrada.caso.id_caso)
+            return PuntajeFidelidad(
+                valor=0.0,
+                componentes={"error": f"{type(exc).__name__}: {exc}"},
+                cobertura_evidencia=COBERTURA_INSUFICIENTE,
+            )
+
+    def _aplicar_fidelidad(
+        self, estado: str, puntaje: PuntajeFidelidad, accion: Accion
+    ) -> tuple[str, str]:
+        """El índice solo puede escalar la severidad, nunca relajarla."""
+        cfg = self.reglas.fidelidad
+        if self.reglas.rango(estado) > self.reglas.rango(ESTADO_CONFORME):
+            return estado, ""
+        aprueba = accion.tipo in cfg.acciones_de_aprobacion
+        if puntaje.evidencia_insuficiente and aprueba:
+            return ESTADO_REVISION, (
+                "Aprobación sin aserciones verificables contra el contexto: "
+                "la evidencia no alcanza para auditar la decisión automáticamente."
+            )
+        if puntaje.valor < cfg.umbral_revision:
+            return ESTADO_REVISION, (
+                f"Fidelidad analítica {puntaje.valor:.2f} < {cfg.umbral_revision:.2f}: "
+                "la decisión cumple las reglas duras pero no se apoya verificablemente en el contexto."
+            )
+        return estado, ""
+
     def auditar(self, caso: Caso) -> Veredicto:
         contexto_n = normalizar(caso.contexto_rag)
         respuesta_n = normalizar(caso.respuesta_agent_b)
@@ -71,16 +118,25 @@ class Auditor:
             for cfg in self.reglas.controles
             if cfg.activo
         ]
-        estado = self.resolver_estado(resultados)
+        entrada = EntradaFidelidad(caso, contexto_n, respuesta_n, extraccion, accion, resultados)
+        puntaje = self._puntuar(entrada)
+        estado, motivo_fidelidad = self._aplicar_fidelidad(
+            self.resolver_estado(resultados), puntaje, accion
+        )
+
+        diagnostico = self._diagnostico(resultados) or "Sin controles aplicables."
+        if motivo_fidelidad:
+            diagnostico = f"{diagnostico} | [IFA] {motivo_fidelidad}"
         return Veredicto(
             id_caso=caso.id_caso,
             estado=estado,
             etiqueta=self.reglas.etiqueta(estado),
-            indice=self.evaluador.puntuar(caso, extraccion, resultados),
-            diagnostico=self._diagnostico(resultados) or "Sin controles aplicables.",
+            indice=puntaje.valor,
+            diagnostico=diagnostico,
             accion=accion,
             extraccion=extraccion,
             resultados=resultados,
+            fidelidad=asdict(puntaje),
             errores=list(extraccion.advertencias),
         )
 
