@@ -40,6 +40,30 @@ class ControlConfig:
 
 
 @dataclass(frozen=True)
+class FidelidadConfig:
+    """Parámetros del Índice de Fidelidad Analítica (ver README, §métrica)."""
+
+    evaluador_por_defecto: str
+    umbral_revision: float
+    pesos: dict[str, float]
+    tolerancia_relativa: float
+    derivaciones: list[str]
+    familias_activas: list[str]
+    familias_independientes: list[str]
+    familias_no_verificables: list[str]
+    acciones_restrictivas: list[str]
+    acciones_de_aprobacion: list[str]
+    claves_directiva_restrictiva: ClaveMatcher
+    claves_estado: ClaveMatcher
+    claves_motivo_alegado: ClaveMatcher
+    backend: str
+    cos_referencia: float
+    minimo_caracteres_token: int
+    stopwords: frozenset[str]
+    penalizaciones: dict[str, float]
+
+
+@dataclass(frozen=True)
 class Reglas:
     version: str
     moneda: dict[str, str]
@@ -52,6 +76,7 @@ class Reglas:
     prioridad_acciones: list[str]
     claves_acciones: dict[str, ClaveMatcher]
     controles: list[ControlConfig]
+    fidelidad: FidelidadConfig
     sha256: str = ""
     ruta: Path | None = field(default=None, compare=False)
 
@@ -158,6 +183,114 @@ def _controles(lista: list, orden: list[str]) -> list[ControlConfig]:
     return controles
 
 
+def _numero(d: dict, clave: str, ruta: str, minimo: float = 0.0, maximo: float = 1.0) -> float:
+    valor = _requerir(d, clave, (int, float), ruta)
+    if not minimo <= float(valor) <= maximo:
+        raise ConfigError(f"'{ruta}.{clave}' debe estar entre {minimo} y {maximo}")
+    return float(valor)
+
+
+BACKENDS_TEXTO = ("tf",)
+PENALIZACIONES_OBLIGATORIAS = (
+    "tope",
+    "afirmacion_no_soportada",
+    "bloqueo_critico",
+    "requisito_omitido",
+    "cifra_no_soportada",
+    "tope_cifras_no_soportadas",
+    "motivo_inexistente",
+)
+
+
+def _fidelidad(datos: dict) -> FidelidadConfig:
+    from .fidelidad import EVALUADORES  # import diferido para evitar el ciclo
+
+    bloque = _requerir(datos, "fidelidad", dict, "")
+    evaluador = _requerir(bloque, "evaluador_por_defecto", str, "fidelidad")
+    if evaluador not in EVALUADORES:
+        raise ConfigError(
+            f"'fidelidad.evaluador_por_defecto' desconocido: {evaluador}. "
+            f"Disponibles: {sorted(EVALUADORES)}"
+        )
+
+    pesos_crudos = _requerir(bloque, "pesos", dict, "fidelidad")
+    pesos = {c: _numero(pesos_crudos, c, "fidelidad.pesos") for c in ("cumplimiento", "anclaje", "tematico")}
+    if abs(sum(pesos.values()) - 1.0) > 1e-6:
+        raise ConfigError(f"'fidelidad.pesos' debe sumar 1.0 (suma {sum(pesos.values())})")
+
+    anclaje = _requerir(bloque, "anclaje", dict, "fidelidad")
+    texto = _requerir(bloque, "texto", dict, "fidelidad")
+    backend = _requerir(texto, "backend", str, "fidelidad.texto")
+    if backend not in BACKENDS_TEXTO:
+        raise ConfigError(
+            f"'fidelidad.texto.backend' desconocido: {backend}. Disponibles: {list(BACKENDS_TEXTO)}"
+        )
+    cos_ref = _numero(texto, "cos_referencia", "fidelidad.texto", minimo=1e-6)
+    min_token = _requerir(texto, "minimo_caracteres_token", int, "fidelidad.texto")
+    if min_token < 1:
+        raise ConfigError("'fidelidad.texto.minimo_caracteres_token' debe ser positivo")
+
+    penal_crudas = _requerir(bloque, "penalizaciones", dict, "fidelidad")
+    penalizaciones = {
+        k: _numero(penal_crudas, k, "fidelidad.penalizaciones") for k in PENALIZACIONES_OBLIGATORIAS
+    }
+
+    return FidelidadConfig(
+        evaluador_por_defecto=evaluador,
+        umbral_revision=_numero(bloque, "umbral_revision", "fidelidad"),
+        pesos=pesos,
+        tolerancia_relativa=_numero(anclaje, "tolerancia_relativa", "fidelidad.anclaje"),
+        derivaciones=_lista_de_str(
+            _requerir(anclaje, "derivaciones", list, "fidelidad.anclaje"), "fidelidad.anclaje.derivaciones"
+        ),
+        familias_activas=_lista_de_str(
+            _requerir(anclaje, "familias_activas", list, "fidelidad.anclaje"),
+            "fidelidad.anclaje.familias_activas",
+        ),
+        familias_independientes=_lista_de_str(
+            _requerir(anclaje, "familias_independientes", list, "fidelidad.anclaje"),
+            "fidelidad.anclaje.familias_independientes",
+        ),
+        familias_no_verificables=_lista_de_str(
+            _requerir(anclaje, "familias_no_verificables", list, "fidelidad.anclaje"),
+            "fidelidad.anclaje.familias_no_verificables",
+        ),
+        acciones_restrictivas=_lista_de_str(
+            _requerir(anclaje, "acciones_restrictivas", list, "fidelidad.anclaje"),
+            "fidelidad.anclaje.acciones_restrictivas",
+        ),
+        acciones_de_aprobacion=_lista_de_str(
+            _requerir(anclaje, "acciones_de_aprobacion", list, "fidelidad.anclaje"),
+            "fidelidad.anclaje.acciones_de_aprobacion",
+        ),
+        claves_directiva_restrictiva=ClaveMatcher(
+            _lista_de_str(
+                _requerir(anclaje, "claves_directiva_restrictiva", list, "fidelidad.anclaje"),
+                "fidelidad.anclaje.claves_directiva_restrictiva",
+            )
+        ),
+        claves_estado=ClaveMatcher(
+            _lista_de_str(
+                _requerir(anclaje, "claves_estado", list, "fidelidad.anclaje"),
+                "fidelidad.anclaje.claves_estado",
+            )
+        ),
+        claves_motivo_alegado=ClaveMatcher(
+            _lista_de_str(
+                _requerir(anclaje, "claves_motivo_alegado", list, "fidelidad.anclaje"),
+                "fidelidad.anclaje.claves_motivo_alegado",
+            )
+        ),
+        backend=backend,
+        cos_referencia=cos_ref,
+        minimo_caracteres_token=min_token,
+        stopwords=frozenset(
+            _lista_de_str(_requerir(texto, "stopwords", list, "fidelidad.texto"), "fidelidad.texto.stopwords")
+        ),
+        penalizaciones=penalizaciones,
+    )
+
+
 # ---------------------------------------------------------------- API pública
 
 
@@ -213,6 +346,7 @@ def construir_reglas(datos: Any, sha256: str = "", ruta: Path | None = None) -> 
             a: ClaveMatcher(_lista_de_str(claves_acc[a], f"acciones.claves.{a}")) for a in prioridad
         },
         controles=controles,
+        fidelidad=_fidelidad(datos),
         sha256=sha256,
         ruta=ruta,
     )

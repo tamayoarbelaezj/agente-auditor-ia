@@ -52,6 +52,41 @@
     }
   },
 
+  "fidelidad": {
+    "evaluador_por_defecto": "semantico",
+    "umbral_revision": 0.70,
+    "pesos": { "cumplimiento": 0.45, "anclaje": 0.40, "tematico": 0.15 },
+    "anclaje": {
+      "tolerancia_relativa": 0.01,
+      "derivaciones": ["neto_deducible", "valor_deducible"],
+      "familias_activas": ["numerica", "motivo", "accion", "estado", "requisito"],
+      "familias_independientes": ["numerica", "motivo"],
+      "familias_no_verificables": ["edad_cliente"],
+      "acciones_restrictivas": ["RECHAZO", "ESCALAMIENTO"],
+      "acciones_de_aprobacion": ["APROBACION"],
+      "claves_directiva_restrictiva": ["bloquear", "sospecha", "alerta*", "requiere*"],
+      "claves_estado": ["exitos*", "validad*", "verificad*", "sin novedad*"],
+      "claves_motivo_alegado": ["alerta*", "sospecha", "excede*", "supera*", "no amparad*", "no cubiert*"]
+    },
+    "texto": {
+      "backend": "tf",
+      "cos_referencia": 0.35,
+      "minimo_caracteres_token": 3,
+      "stopwords": ["de", "la", "el", "los", "las", "un", "una", "su", "sus", "en", "con", "por",
+                    "para", "del", "al", "que", "se", "ha", "han", "es", "este", "esta", "como",
+                    "mas", "lo", "usted"]
+    },
+    "penalizaciones": {
+      "tope": 0.90,
+      "afirmacion_no_soportada": 0.80,
+      "bloqueo_critico": 0.80,
+      "requisito_omitido": 0.30,
+      "cifra_no_soportada": 0.20,
+      "tope_cifras_no_soportadas": 0.40,
+      "motivo_inexistente": 0.30
+    }
+  },
+
   "controles": [
     {
       "id": "CTRL-00",

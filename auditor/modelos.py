@@ -86,6 +86,18 @@ class ResultadoControl:
         return self.estado in (EstadoControl.NO_CUMPLE, EstadoControl.INDETERMINADO)
 
 
+@dataclass(frozen=True)
+class EntradaFidelidad:
+    """Todo lo que el evaluador de fidelidad necesita de un caso ya procesado."""
+
+    caso: Caso
+    contexto_n: str
+    respuesta_n: str
+    extraccion: Extraccion
+    accion: Accion
+    resultados: list[ResultadoControl]
+
+
 @dataclass
 class Veredicto:
     id_caso: int | str | None
@@ -96,4 +108,5 @@ class Veredicto:
     accion: Accion | None = None
     extraccion: Extraccion | None = None
     resultados: list[ResultadoControl] = field(default_factory=list)
+    fidelidad: dict[str, Any] = field(default_factory=dict)
     errores: list[str] = field(default_factory=list)
