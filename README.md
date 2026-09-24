@@ -13,11 +13,15 @@ Hay **dos formas equivalentes** de ejecutarlo. Ambas llaman exactamente al mismo
 primera es la convención estándar de Python para ejecutar un paquete, y la segunda es un script
 visible en la raíz para quien prefiera un archivo que abrir y correr.
 
-Primero, sitúate en la carpeta del proyecto:
+Primero obtén el proyecto y sitúate en su carpeta raíz (la que contiene `reglas.json`):
 
-```powershell
-cd C:\Users\1000613216\PruebaJr
+```bash
+git clone https://github.com/tamayoarbelaezj/agente-auditor-ia.git
+cd agente-auditor-ia
 ```
+
+Si recibiste el proyecto comprimido, descomprime el archivo y entra a la carpeta resultante en
+lugar de clonar.
 
 **Opción A — como módulo:**
 
