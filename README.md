@@ -10,8 +10,15 @@ pólizas a partir de un contexto RAG), verificando reglas de negocio, controles 
 Requiere Python 3.10+. El motor usa solo la librería estándar; `pytest` es solo para pruebas.
 
 ```bash
-python -m auditor --casos data/casos.json --reglas reglas.json \
-    --salida salida/reporte.txt --json salida/reporte.json
+python main.py
+```
+
+Eso audita `data/casos.json` con `reglas.json` y escribe los reportes en `salida/`.
+Equivale a `python -m auditor`. Para indicar rutas u opciones, todo en una sola línea
+(PowerShell no admite el `\` de continuación de bash):
+
+```bash
+python main.py --casos data/casos.json --reglas reglas.json --salida salida/reporte.txt --json salida/reporte.json
 ```
 
 | Opción | Descripción |
@@ -26,12 +33,17 @@ python -m auditor --casos data/casos.json --reglas reglas.json \
 
 Código de salida: `0` ejecución correcta, `2` error de configuración o de entrada.
 
-Pruebas:
+Otros comandos:
 
 ```bash
-pip install -r requirements.txt
-python -m pytest
+python main.py --comparar      # índice semántico contra la línea base, caso por caso
+python tools/calibrar.py       # calibración: barrido de umbrales, F1 y sensibilidad
+python -m pytest               # suite completa de pruebas (requiere: pip install -r requirements.txt)
 ```
+
+Para la demostración en vivo, `Demo_Agente_Auditor.ipynb` recorre el flujo completo por caso:
+decisión de Agent B, razonamiento del auditor, métrica, confianza y similitud. Requiere
+`pip install jupyter`; `salida/Demo_Agente_Auditor.html` es ese mismo notebook ya ejecutado.
 
 ## Resultado sobre el dataset del reto
 
