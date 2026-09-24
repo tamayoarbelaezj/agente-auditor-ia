@@ -3,9 +3,9 @@
 Equivalente a ``python -m auditor``, para poder ejecutar el proyecto con un
 archivo visible en la raíz:
 
-    python main.py
-    python main.py --casos data/casos.json --reglas reglas.json
-    python main.py --comparar
+    python EjecucionPrueba.py
+    python EjecucionPrueba.py --casos data/casos.json --reglas reglas.json
+    python EjecucionPrueba.py --comparar
 
 Sin argumentos usa `data/casos.json` y `reglas.json`, imprime el diagnóstico de
 cada caso y escribe los reportes en `salida/`.

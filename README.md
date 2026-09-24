@@ -9,16 +9,41 @@ pólizas a partir de un contexto RAG), verificando reglas de negocio, controles 
 
 Requiere Python 3.10+. El motor usa solo la librería estándar; `pytest` es solo para pruebas.
 
-```bash
-python main.py
+Hay **dos formas equivalentes** de ejecutarlo. Ambas llaman exactamente al mismo código; la
+primera es la convención estándar de Python para ejecutar un paquete, y la segunda es un script
+visible en la raíz para quien prefiera un archivo que abrir y correr.
+
+Primero, sitúate en la carpeta del proyecto:
+
+```powershell
+cd C:\Users\1000613216\PruebaJr
 ```
 
-Eso audita `data/casos.json` con `reglas.json` y escribe los reportes en `salida/`.
-Equivale a `python -m auditor`. Para indicar rutas u opciones, todo en una sola línea
-(PowerShell no admite el `\` de continuación de bash):
+**Opción A — como módulo:**
 
-```bash
-python main.py --casos data/casos.json --reglas reglas.json --salida salida/reporte.txt --json salida/reporte.json
+```powershell
+python -m auditor
+```
+
+**Opción B — con el script de la raíz:**
+
+```powershell
+python EjecucionPrueba.py
+```
+
+Cualquiera de las dos audita `data/casos.json` con `reglas.json`, imprime el diagnóstico de los
+casos en la consola y escribe los reportes en `salida/` (`reporte.txt` y `reporte.json`).
+
+Para indicar rutas u opciones, escribe **todo en una sola línea**. En PowerShell el `\` de
+continuación de bash no funciona; si necesitas partir el comando, el continuador es la comilla
+invertida `` ` ``:
+
+```powershell
+python -m auditor --casos data/casos.json --reglas reglas.json --salida salida/reporte.txt --json salida/reporte.json
+```
+
+```powershell
+python EjecucionPrueba.py --casos data/casos.json --reglas reglas.json --salida salida/reporte.txt --json salida/reporte.json
 ```
 
 | Opción | Descripción |
@@ -35,11 +60,13 @@ Código de salida: `0` ejecución correcta, `2` error de configuración o de ent
 
 Otros comandos:
 
-```bash
-python main.py --comparar      # índice semántico contra la línea base, caso por caso
-python tools/calibrar.py       # calibración: barrido de umbrales, F1 y sensibilidad
-python -m pytest               # suite completa de pruebas (requiere: pip install -r requirements.txt)
+```powershell
+python -m auditor --comparar     # índice semántico contra la línea base, caso por caso
+python tools/calibrar.py         # calibración: barrido de umbrales, F1 y sensibilidad
+python -m pytest                 # suite completa de pruebas (requiere: pip install -r requirements.txt)
 ```
+
+(`python EjecucionPrueba.py --comparar` hace exactamente lo mismo que la primera línea.)
 
 Para la demostración en vivo, `Demo_Agente_Auditor.ipynb` recorre el flujo completo por caso:
 decisión de Agent B, razonamiento del auditor, métrica, confianza y similitud. Requiere
@@ -77,6 +104,8 @@ reglas.json ─► config (validación + regex precompiladas) ──────
 | `aserciones.py` | Descompone la respuesta en aserciones verificables y las contrasta con el contexto |
 | `fidelidad.py` | Interfaz `EvaluadorFidelidad`, evaluador semántico (por defecto) y provisional (línea base) |
 | `reporte.py` | Formato exacto de consola y JSON de trazabilidad |
+| `auditor/__main__.py` | El CLI: argumentos, carga de archivos, manejo de errores y códigos de salida (`python -m auditor`) |
+| `EjecucionPrueba.py` | Lanzador en la raíz; solo llama a la función `main()` del CLI, sin lógica propia |
 
 ### Controles
 
